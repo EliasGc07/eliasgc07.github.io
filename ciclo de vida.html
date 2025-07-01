@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ciclo de Vida de los Datos en Subprocesos de TechHome</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        .title {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 40px;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            height: 700px;
+            margin: 30px 0;
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+            border-radius: 20px;
+            padding: 40px;
+            overflow: hidden;
+        }
+        
+        .stage {
+            position: absolute;
+            padding: 25px;
+            border-radius: 25px;
+            color: white;
+            font-weight: 600;
+            text-align: left;
+            font-size: 13px;
+            width: 220px;
+            height: 140px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            border: 3px solid rgba(255,255,255,0.2);
+            z-index: 10;
+        }
+        
+        .stage:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+            z-index: 15;
+        }
+        
+        .stage-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subprocess-list {
+            font-size: 11px;
+            line-height: 1.4;
+            opacity: 0.95;
+        }
+        
+        .subprocess-list div {
+            margin-bottom: 3px;
+            padding-left: 8px;
+            position: relative;
+        }
+        
+        .subprocess-list div:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: rgba(255,255,255,0.8);
+        }
+        
+        /* Posicionamiento optimizado */
+        .captura {
+            background: linear-gradient(135deg, #10b981, #059669);
+            top: 50px;
+            left: calc(50% - 110px);
+        }
+        
+        .almacenamiento {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            top: 150px;
+            right: 60px;
+        }
+        
+        .procesamiento {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            top: 350px;
+            right: 60px;
+        }
+        
+        .analisis {
+            background: linear-gradient(135deg, #ec4899, #db2777);
+            top: 450px;
+            left: calc(50% - 110px);
+        }
+        
+        .archivado {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            top: 350px;
+            left: 60px;
+        }
+        
+        .eliminacion {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            top: 150px;
+            left: 60px;
+        }
+        
+        /* SVG para conexiones */
+        .connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            pointer-events: none;
+        }
+        
+        .connection-path {
+            stroke: #4f46e5;
+            stroke-width: 3;
+            fill: none;
+            stroke-linecap: round;
+            stroke-dasharray: 8, 4;
+            animation: dash 3s linear infinite;
+            filter: drop-shadow(0 2px 4px rgba(79, 70, 229, 0.3));
+        }
+        
+        @keyframes dash {
+            to { stroke-dashoffset: -24; }
+        }
+        
+        /* Flechas mejoradas */
+        .arrow-marker {
+            fill: #4f46e5;
+            stroke: #4f46e5;
+        }
+        
+        .legend {
+            margin-top: 40px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .legend-item {
+            padding: 20px;
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+            border-radius: 15px;
+            border-left: 5px solid;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .legend-item:hover {
+            transform: translateY(-2px);
+        }
+        
+        .comercial { border-left-color: #10b981; }
+        .clientes { border-left-color: #3b82f6; }
+        .operaciones { border-left-color: #f59e0b; }
+        .inteligencia { border-left-color: #8b5cf6; }
+        
+        .legend-item h4 {
+            margin: 0 0 8px 0;
+            color: #1f2937;
+            font-size: 16px;
+        }
+        
+        .legend-item p {
+            margin: 0;
+            color: #6b7280;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .flow-info {
+            margin-top: 30px;
+            padding: 25px;
+            background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+            border-radius: 15px;
+            border: 1px solid #93c5fd;
+        }
+        
+        .flow-info h4 {
+            color: #1e40af;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .flow-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+        
+        .flow-list li {
+            background: rgba(255,255,255,0.7);
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: #1f2937;
+            font-size: 14px;
+            border-left: 3px solid #3b82f6;
+        }
+        
+        @media (max-width: 768px) {
+            .diagram-container {
+                height: 800px;
+                padding: 20px;
+            }
+            
+            .stage {
+                width: 180px;
+                height: 120px;
+                padding: 15px;
+            }
+            
+            .stage-title {
+                font-size: 14px;
+            }
+            
+            .subprocess-list {
+                font-size: 10px;
+            }
+            
+            .captura, .analisis {
+                left: calc(50% - 90px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">Ciclo de Vida de los Datos Mapeado en Subprocesos de TechHome</h1>
+        
+        <div class="diagram-container">
+            <!-- Conexiones SVG -->
+            <svg class="connections" id="connections-svg">
+                <!-- Definir marcadores de flecha -->
+                <defs>
+                    <marker id="arrowhead" markerWidth="12" markerHeight="8" 
+                            refX="12" refY="4" orient="auto" markerUnits="strokeWidth">
+                        <polygon points="0,0 12,4 0,8" class="arrow-marker" />
+                    </marker>
+                </defs>
+                <!-- Las conexiones se generarán dinámicamente con JavaScript -->
+            </svg>
+            
+            <!-- Etapas del ciclo -->
+            <div class="stage captura" data-stage="captura">
+                <div class="stage-title">1. CAPTURA</div>
+                <div class="subprocess-list">
+                    <div>Gestión de Catálogo</div>
+                    <div>Marketing y Promociones</div>
+                    <div>Gestión de Usuarios</div>
+                    <div>Análisis de Comportamiento</div>
+                    <div>Inventario y Almacenes</div>
+                    <div>Fulfillment</div>
+                </div>
+            </div>
+
+            <div class="stage almacenamiento" data-stage="almacenamiento">
+                <div class="stage-title">2. ALMACENAMIENTO</div>
+                <div class="subprocess-list">
+                    <div>Integración de Datos</div>
+                    <div>MySQL, Data Lake</div>
+                    <div>Data Warehouse</div>
+                    <div>Cloud Storage</div>
+                    <div>Gobierno y Tecnología</div>
+                </div>
+            </div>
+
+            <div class="stage procesamiento" data-stage="procesamiento">
+                <div class="stage-title">3. PROCESAMIENTO</div>
+                <div class="subprocess-list">
+                    <div>Integración de Datos</div>
+                    <div>ETL, Validación</div>
+                    <div>Limpieza</div>
+                    <div>Transformación</div>
+                    <div>Anonimización</div>
+                </div>
+            </div>
+
+            <div class="stage analisis" data-stage="analisis">
+                <div class="stage-title">4. ANÁLISIS</div>
+                <div class="subprocess-list">
+                    <div>Análisis y Reporting</div>
+                    <div>Dashboards</div>
+                    <div>Análisis de Ventas</div>
+                    <div>Análisis de Comportamiento</div>
+                    <div>Modelos Predictivos</div>
+                </div>
+            </div>
+
+            <div class="stage archivado" data-stage="archivado">
+                <div class="stage-title">5. ARCHIVADO</div>
+                <div class="subprocess-list">
+                    <div>Gobierno y Tecnología</div>
+                    <div>Azure Archive Storage</div>
+                    <div>Compresión</div>
+                    <div>Indexación</div>
+                    <div>Metadatos</div>
+                </div>
+            </div>
+
+            <div class="stage eliminacion" data-stage="eliminacion">
+                <div class="stage-title">6. ELIMINACIÓN</div>
+                <div class="subprocess-list">
+                    <div>Gobierno y Tecnología</div>
+                    <div>Data Governance Committee</div>
+                    <div>Eliminación Segura</div>
+                    <div>Auditoría</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item comercial">
+                <h4>Gestión Comercial</h4>
+                <p>Captura (Catálogo, Marketing, Análisis de Ventas) → Análisis (Métricas comerciales)</p>
+            </div>
+            <div class="legend-item clientes">
+                <h4>Gestión de Clientes</h4>
+                <p>Captura (Usuarios, Atención, Comportamiento) → Análisis (Patrones de compra)</p>
+            </div>
+            <div class="legend-item operaciones">
+                <h4>Operaciones</h4>
+                <p>Captura (Inventario, Fulfillment, Financiera) → Procesamiento (Validación)</p>
+            </div>
+            <div class="legend-item inteligencia">
+                <h4>Inteligencia de Datos</h4>
+                <p>Almacenamiento → Procesamiento → Análisis → Archivado → Eliminación</p>
+            </div>
+        </div>
+
+        <div class="flow-info">
+            <h4>Flujos de Datos Principales</h4>
+            <ul class="flow-list">
+                <li>Comercial → Operaciones: Información de ventas actualiza inventario</li>
+                <li>Clientes → Comercial: Perfiles alimentan estrategias de marketing</li>
+                <li>Operaciones → Comercial: Estado de stock influye en promociones</li>
+                <li>Todos → Inteligencia: Generación continua para análisis</li>
+                <li>Inteligencia → Todos: Insights para optimización</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function drawConnections() {
+            const svg = document.getElementById('connections-svg');
+            const container = document.querySelector('.diagram-container');
+            
+            // Función para obtener el centro de un elemento
+            function getElementCenter(element) {
+                const rect = element.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                
+                return {
+                    x: rect.left - containerRect.left + rect.width / 2,
+                    y: rect.top - containerRect.top + rect.height / 2
+                };
+            }
+            
+            // Función para obtener el punto de conexión en el borde de la caja
+            function getConnectionPoint(fromCenter, toCenter, elementRect) {
+                const dx = toCenter.x - fromCenter.x;
+                const dy = toCenter.y - fromCenter.y;
+                const angle = Math.atan2(dy, dx);
+                
+                const width = elementRect.width / 2;
+                const height = elementRect.height / 2;
+                
+                // Calcular el punto en el borde de la caja
+                let x, y;
+                
+                if (Math.abs(Math.cos(angle)) * height > Math.abs(Math.sin(angle)) * width) {
+                    // Intersección con lado izquierdo o derecho
+                    x = fromCenter.x + (dx > 0 ? width : -width);
+                    y = fromCenter.y + (dx > 0 ? width : -width) * Math.tan(angle);
+                } else {
+                    // Intersección con lado superior o inferior
+                    y = fromCenter.y + (dy > 0 ? height : -height);
+                    x = fromCenter.x + (dy > 0 ? height : -height) / Math.tan(angle);
+                }
+                
+                return { x, y };
+            }
+            
+            // Obtener elementos
+            const stages = {
+                captura: document.querySelector('[data-stage="captura"]'),
+                almacenamiento: document.querySelector('[data-stage="almacenamiento"]'),
+                procesamiento: document.querySelector('[data-stage="procesamiento"]'),
+                analisis: document.querySelector('[data-stage="analisis"]'),
+                archivado: document.querySelector('[data-stage="archivado"]'),
+                eliminacion: document.querySelector('[data-stage="eliminacion"]')
+            };
+            
+            // Definir conexiones en orden del ciclo
+            const connections = [
+                ['captura', 'almacenamiento'],
+                ['almacenamiento', 'procesamiento'],
+                ['procesamiento', 'analisis'],
+                ['analisis', 'archivado'],
+                ['archivado', 'eliminacion'],
+                ['eliminacion', 'captura']
+            ];
+            
+            // Limpiar SVG
+            while (svg.children.length > 1) {
+                svg.removeChild(svg.lastChild);
+            }
+            
+            // Dibujar cada conexión
+            connections.forEach((connection, index) => {
+                const [from, to] = connection;
+                const fromElement = stages[from];
+                const toElement = stages[to];
+                
+                if (!fromElement || !toElement) return;
+                
+                const fromCenter = getElementCenter(fromElement);
+                const toCenter = getElementCenter(toElement);
+                
+                const fromRect = fromElement.getBoundingClientRect();
+                const toRect = toElement.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                
+                // Ajustar las dimensiones de las cajas
+                const fromBox = {
+                    width: fromRect.width,
+                    height: fromRect.height
+                };
+                const toBox = {
+                    width: toRect.width,
+                    height: toRect.height
+                };
+                
+                const fromPoint = getConnectionPoint(fromCenter, toCenter, fromBox);
+                const toPoint = getConnectionPoint(toCenter, fromCenter, toBox);
+                
+                // Crear curva suave
+                const midX = (fromPoint.x + toPoint.x) / 2;
+                const midY = (fromPoint.y + toPoint.y) / 2;
+                
+                // Añadir curvatura para evitar superposición
+                const curve = 50;
+                const controlX = midX + (Math.random() - 0.5) * curve;
+                const controlY = midY + (Math.random() - 0.5) * curve;
+                
+                // Crear path
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', `M ${fromPoint.x} ${fromPoint.y} Q ${controlX} ${controlY} ${toPoint.x} ${toPoint.y}`);
+                path.setAttribute('class', 'connection-path');
+                path.setAttribute('marker-end', 'url(#arrowhead)');
+                path.style.animationDelay = `${index * 0.3}s`;
+                
+                svg.appendChild(path);
+            });
+        }
+        
+        // Dibujar conexiones al cargar la página
+        window.addEventListener('load', () => {
+            setTimeout(drawConnections, 100);
+        });
+        
+        // Redibujar al cambiar el tamaño de ventana
+        window.addEventListener('resize', () => {
+            setTimeout(drawConnections, 100);
+        });
+    </script>
+</body>
+</html>
